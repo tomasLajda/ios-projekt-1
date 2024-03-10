@@ -105,6 +105,7 @@ filterAfter(){
     return
   fi
 
+
   local IFS=$'\n'
   for line in $output; do
     date=$(echo $line | awk -F ';' '{printf "%s", $2}')
@@ -269,9 +270,8 @@ profitFunc() {
   echo -e "$finalString" | sort
 }
 
-if [ "$#" == 0 ]; then
-    echo "No arguments provided."
-    exit 1
+if [ "$#" -lt 2 ]; then
+  exit 1
 fi
 
 for arg in "$@"; do
@@ -301,12 +301,10 @@ for arg in "$@"; do
     continue
   fi
 
-  if [[ $arg != *".log"* && $user == "" ]]; then
+  if [ "$user" == "" ]; then
     user=$arg
-  elif [[ $arg != *".log"* && $user != "" ]]; then
-    exit 1
   else
-    files+=($arg)
+    files+=("$arg"$'\n')
   fi  
 done
 
@@ -327,17 +325,22 @@ if [ "$beforeSet" -gt 1 ]; then
 fi
 
 if [ ${#files[@]} == 0 ]; then 
-  echo Did not provide file.
   exit 1
 fi
 
+IFS=$'\n'
 for file in ${files[@]}; do
+  if [ ! -e "$file" ]; then
+    exit 1
+  fi
+
   if echo "$file" | grep -q ".gz"; then
     output+=$(gzip -cd "$file")
   else
     output+=$(cat "$file" | tr -d '\0')$'\n'
   fi
 done
+IFS=$' '
 
 filterUser
 filterAfter
