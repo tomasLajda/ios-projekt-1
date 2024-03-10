@@ -128,9 +128,29 @@ listFunc(){
   echo "$output"
 }
 
-# listCurrencyFunc(){
-#   # TODO
-# }
+listCurrencyFunc(){
+  local currencies=()
+  local IFS=$'\n'
+
+  for line in $output; do
+    local isCurrency=1
+    lastCurrency=$(echo $line | awk -F ';' '{printf "%s", $3}')
+
+    for ((i=0; i<${#currencies[@]}; i++)); do
+      if [ "$lastCurrency" == "${currencies[$i]}" ]; then
+        isCurrency=0
+        break
+      fi
+    done
+
+    if [ $isCurrency == 1 ]; then
+      currencies+=("$lastCurrency")
+    fi
+
+  done
+
+  echo "${currencies[@]}" | tr ' ' '\n' | sort
+}
 
 # statusFunc(){
 #   # TODO
@@ -147,7 +167,6 @@ if [ "$#" == 0 ]; then
     exit 1
 fi
 
-# Loop over arguments by index
 for ((i=1; i<=$#; i++)); do
   arg=${!i}
 
@@ -176,4 +195,5 @@ done
 filterUser
 filterCurrency
 filterBefore
-listFunc
+# listFunc
+listCurrencyFunc
