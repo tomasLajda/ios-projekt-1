@@ -1,8 +1,13 @@
 #!/bin/bash
 POSIXLY_CORRECT=yes
 
+lastFlag=0
 command=list
+commandSet=0
+after=""
+afterSet=0
 before=""
+beforeSet=0
 user=""
 currency=()
 files=()
@@ -10,23 +15,29 @@ output=""
 margin=${XTF_PROFIT:-20}
 
 setCommand(){
+
   case $1 in
     list)
+      command=list
+      ((commandSet++))
       return 0
     ;;
     
     list-currency)
       command=list-currency
+      ((commandSet++))
       return 0
     ;;
 
     status)
       command=status
+      ((commandSet++))
       return 0
     ;;
 
     profit)
       command=profit
+      ((commandSet++))
       return 0
     ;;
   esac
@@ -37,21 +48,21 @@ setCommand(){
 setFilters(){
   case $1 in
     -a)
-      after="$2 $3"
-      return 0
+      lastFlag=1
     ;;
 
     -b)
-      before="$2 $3"
-      return 0
+      lastFlag=2
     ;;
 
     -c)
-      currency="${currency[@]} $2"
-      return 0
-  esac
+      lastFlag=3
+    ;;
 
-  return 1
+    *)
+      lastFlag=0
+    ;;
+  esac
 }
 
 filterUser(){
@@ -263,32 +274,64 @@ if [ "$#" == 0 ]; then
     exit 1
 fi
 
-for ((i=1; i<=$#; i++)); do
-  arg=${!i}
+for arg in "$@"; do
+  if [ $lastFlag == 1 ]; then
+    after=$arg
+    lastFlag=0
+    ((afterSet++))
+    continue
+  elif [ $lastFlag == 2 ]; then
+    before=$arg
+    lastFlag=0
+    ((beforeSet++))
+    continue
+  elif [ $lastFlag == 3 ]; then
+    currency="$arg ${currency[@]}"
+    lastFlag=0
+    continue
+  fi
 
   setCommand $arg
-  if [ $? = 0 ]; then
-    continue
-  fi
-  
-  nextIndex=$((i+1))
-  nextArg1=${!nextIndex}
-  nextIndex=$((i+2))
-  nextArg2=${!nextIndex}
-  setFilters $arg $nextArg1 $nextArg2
-  if [ $? = 0 ]; then
-    ((i++))
+  if [ $? == 0 ]; then
     continue
   fi
 
-  if [[ $arg != *".log"* && $i != $# ]]; then
+  setFilters $arg
+  if [ $lastFlag != 0 ]; then
+    continue
+  fi
+
+  if [[ $arg != *".log"* && $user == "" ]]; then
     user=$arg
+  elif [[ $arg != *".log"* && $user != "" ]]; then
+    exit 1
   else
     files+=($arg)
   fi  
 done
 
-for file in "${files[@]}"; do
+if [ "$user" == "" ]; then
+  exit 1
+fi
+
+if [ "$commandSet" -gt 1 ]; then
+  exit 1
+fi
+
+if [ "$afterSet" -gt 1 ]; then
+  exit 1
+fi
+
+if [ "$beforeSet" -gt 1 ]; then
+  exit 1
+fi
+
+if [ ${#files[@]} == 0 ]; then 
+  echo Did not provide file.
+  exit 1
+fi
+
+for file in ${files[@]}; do
   if echo "$file" | grep -q ".gz"; then
     output+=$(gzip -cd "$file")
   else
@@ -297,9 +340,9 @@ for file in "${files[@]}"; do
 done
 
 filterUser
-filterCurrency
-filterBefore
 filterAfter
+filterBefore
+filterCurrency
 
 case $command in
     list)
