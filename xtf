@@ -10,7 +10,6 @@ before=""
 beforeSet=0
 user=""
 currency=()
-files=()
 output=""
 margin=${XTF_PROFIT:-20}
 
@@ -74,7 +73,7 @@ filterCurrency() {
     return
   fi
 
-  local string=$(echo "$output" | awk -F';' -v currency="${currency[@]}" '
+  output=$(echo "$output" | awk -F';' -v currency="${currency[@]}" '
     BEGIN {
         split(currency, arr, " ");
         for (i in arr) {
@@ -87,17 +86,6 @@ filterCurrency() {
         }
     }
   ')
-
-  output="$string"
-
-  # for curr in $currency; do
-  #   matches=$(echo "$output" | grep -h "$curr")
-  #   if [ -n "$matches" ]; then
-  #     string+="$matches"$'\n'
-  #   fi
-  # done
-
-  # output="${string%$'\n'}"
 }
 
 filterAfter(){
@@ -174,27 +162,7 @@ listFunc(){
 }
 
 listCurrencyFunc(){
-  local currencies=()
-  local IFS=$'\n'
-
-  for line in $output; do
-    local isCurrency=1
-    lastCurrency=$(echo $line | awk -F ';' '{printf "%s", $3}')
-
-    for ((i=0; i<${#currencies[@]}; i++)); do
-      if [ "$lastCurrency" == "${currencies[$i]}" ]; then
-        isCurrency=0
-        break
-      fi
-    done
-
-    if [ $isCurrency == 1 ]; then
-      currencies+=("$lastCurrency")
-    fi
-
-  done
-
-  echo "${currencies[@]}" | tr ' ' '\n' | sort
+  echo "$output" | awk -F ';' '{printf "%s\n", $3}' | sort | uniq
 }
 
 statusFunc() {
@@ -275,17 +243,17 @@ if [ "$#" -lt 2 ]; then
 fi
 
 for arg in "$@"; do
-  if [ $lastFlag == 1 ]; then
+  if [ $lastFlag -eq 1 ]; then
     after=$arg
     lastFlag=0
     ((afterSet++))
     continue
-  elif [ $lastFlag == 2 ]; then
+  elif [ $lastFlag -eq 2 ]; then
     before=$arg
     lastFlag=0
     ((beforeSet++))
     continue
-  elif [ $lastFlag == 3 ]; then
+  elif [ $lastFlag -eq 3 ]; then
     currency="$arg ${currency[@]}"
     lastFlag=0
     continue
@@ -304,9 +272,18 @@ for arg in "$@"; do
   if [ "$user" == "" ]; then
     user=$arg
   else
-    files+=("$arg"$'\n')
+    if [ ! -e "$arg" ]; then
+      exit 1
+    fi
+
+    if echo "$arg" | grep -q ".gz"; then
+      output+=$(gzip -cd "$arg")
+    else
+      output+=$(cat "$arg" | tr -d '\0')$'\n'
+    fi
   fi  
 done
+
 
 if [ "$user" == "" ]; then
   exit 1
@@ -323,24 +300,6 @@ fi
 if [ "$beforeSet" -gt 1 ]; then
   exit 1
 fi
-
-if [ ${#files[@]} == 0 ]; then 
-  exit 1
-fi
-
-IFS=$'\n'
-for file in ${files[@]}; do
-  if [ ! -e "$file" ]; then
-    exit 1
-  fi
-
-  if echo "$file" | grep -q ".gz"; then
-    output+=$(gzip -cd "$file")
-  else
-    output+=$(cat "$file" | tr -d '\0')$'\n'
-  fi
-done
-IFS=$' '
 
 filterUser
 filterAfter
