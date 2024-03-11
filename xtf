@@ -9,12 +9,11 @@ afterSet=0
 before=""
 beforeSet=0
 user=""
-currency=()
+currency=""
 output=""
 margin=${XTF_PROFIT:-20}
 
 setCommand(){
-
   case $1 in
     list)
       command=list
@@ -64,16 +63,36 @@ setFilters(){
   esac
 }
 
+checkFiles(){
+  file=""
+  if [ ! -e "$1" ]; then
+      exit 1
+  fi
+
+  if echo "$1" | grep -q ".gz"; then
+    file=$(gzip -cd "$1")
+  else
+    file=$(cat "$1")
+  fi
+
+  while IFS= read -r line; do
+    if ! echo "$line" | grep -qE "^[^;]+;[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2};[A-Za-z]{3};[-0-9.]+$"; then
+      exit 1
+    fi
+  done <<< "$file"
+  output+="$file"$'\n'
+}
+
 filterUser(){
   output=$(echo "$output" | grep -h "$user")
 }
 
 filterCurrency() {
-  if [ "$currency" == "" ]; then
+  if [ "${currency[0]}" == "" ]; then
     return
   fi
 
-  output=$(echo "$output" | awk -F';' -v currency="${currency[@]}" '
+  output=$(echo "$output" | awk -F';' -v currency="$currency" '
     BEGIN {
         split(currency, arr, " ");
         for (i in arr) {
@@ -88,7 +107,6 @@ filterCurrency() {
   ')
 }
 
-# TODO refactor
 filterAfter(){
   if [ "$after" == "" ]; then 
     return
@@ -96,7 +114,7 @@ filterAfter(){
 
   local IFS=$'\n'
   for line in $output; do
-    date=$(echo $line | awk -F ';' '{printf "%s", $2}')
+    date=$(echo "$line" | awk -F ';' '{printf "%s", $2}')
     isAfter=$(echo "$date" | awk -v afterDate="$after" '{split($0, date, /[- :]/);
       isValid = 1;
 
@@ -117,13 +135,12 @@ filterAfter(){
       print isValid;
     }')
 
-    if [ $isAfter == 1 ]; then
+    if [ "$isAfter" == 1 ]; then
       output=$(echo "$output" | grep -v "$date")
     fi
   done
 }
 
-# TODO refactor
 filterBefore(){
   if [ "$before" == "" ]; then 
     return
@@ -131,7 +148,7 @@ filterBefore(){
 
   local IFS=$'\n'
   for line in $output; do
-    date=$(echo $line | awk -F ';' '{printf "%s", $2}')
+    date=$(echo "$line" | awk -F ';' '{printf "%s", $2}')
     isBefore=$(echo "$date" | awk -v beforeDate="$before" '{split($0, date, /[- :]/);
       isValid = 0;
 
@@ -152,7 +169,7 @@ filterBefore(){
       print isValid;
     }')
 
-    if [ $isBefore == 1 ]; then
+    if [ "$isBefore" == 1 ]; then
       output=$(echo "$output" | grep -v "$date")
     fi
   done
@@ -207,17 +224,17 @@ for arg in "$@"; do
     ((beforeSet++))
     continue
   elif [ $lastFlag -eq 3 ]; then
-    currency="$arg ${currency[@]}"
+    currency="$arg $currency"
     lastFlag=0
     continue
   fi
 
-  setCommand $arg
+  setCommand "$arg"
   if [ $? == 0 ]; then
     continue
   fi
 
-  setFilters $arg
+  setFilters "$arg"
   if [ $lastFlag != 0 ]; then
     continue
   fi
@@ -225,15 +242,7 @@ for arg in "$@"; do
   if [ "$user" == "" ]; then
     user=$arg
   else
-    if [ ! -e "$arg" ]; then
-      exit 1
-    fi
-
-    if echo "$arg" | grep -q ".gz"; then
-      output+=$(gzip -cd "$arg")
-    else
-      output+=$(cat "$arg" | tr -d '\0')$'\n'
-    fi
+    checkFiles "$arg"
   fi  
 done
 
@@ -251,6 +260,14 @@ if [ "$afterSet" -gt 1 ]; then
 fi
 
 if [ "$beforeSet" -gt 1 ]; then
+  exit 1
+fi
+
+if ! date -d "$after" &>/dev/null; then
+  exit 1
+fi
+
+if ! date -d "$before" &>/dev/null; then
   exit 1
 fi
 
