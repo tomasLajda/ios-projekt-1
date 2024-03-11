@@ -88,11 +88,11 @@ filterCurrency() {
   ')
 }
 
+# TODO refactor
 filterAfter(){
   if [ "$after" == "" ]; then 
     return
   fi
-
 
   local IFS=$'\n'
   for line in $output; do
@@ -123,6 +123,7 @@ filterAfter(){
   done
 }
 
+# TODO refactor
 filterBefore(){
   if [ "$before" == "" ]; then 
     return
@@ -166,76 +167,28 @@ listCurrencyFunc(){
 }
 
 statusFunc() {
-  local currencies=()
-  local currenciesValue=()
-  local IFS=$'\n'
+  currencyNames=$(echo "$output" | awk -F ';' '{printf "%s\n", $3}' | sort | uniq)
 
-  for line in $output; do
-    local isCurrency=1
-    lastCurrency=$(echo "$line" | awk -F ';' '{printf "%s", $3}')
-    lastValue=$(echo "$line" | awk -F ';' '{printf "%s", $4}')
-
-    for ((i=0; i<${#currencies[@]}; i++)); do
-      if [ "$lastCurrency" == "${currencies[$i]}" ]; then
-        isCurrency=0
-        currenciesValue[$i]=$(echo "${currenciesValue[$i]} + $lastValue" | bc)
-        break
-      fi
-    done
-
-    if [ $isCurrency == 1 ]; then
-      currencies+=("$lastCurrency")
-      currenciesValue+=("$lastValue")
-    fi
+  for name in $currencyNames; do
+    values=$(echo "$output" | grep -h "${name}" | awk -F ';' '{printf "%s ", $4}')
+    sum=$(echo "$values" | awk '{ sum = 0; for(i=1; i<=NF; i++) sum += $i; printf "%.4f\n", sum}')
+    echo "$name : $sum"
   done
-
-  local finalString=""
-  for ((i=0; i<${#currencies[@]}; i++)); do
-    finalString+="${currencies[$i]} : ${currenciesValue[$i]}\n"
-  done
-
-  finalString="${finalString%"\n"}"
-
-  echo -e "$finalString" | sort
 }
 
 profitFunc() {
-  local currencies=()
-  local currenciesValue=()
-  local IFS=$'\n'
+  currencyNames=$(echo "$output" | awk -F ';' '{printf "%s\n", $3}' | sort | uniq)
 
-  for line in $output; do
-    local isCurrency=1
-    lastCurrency=$(echo "$line" | awk -F ';' '{printf "%s", $3}')
-    lastValue=$(echo "$line" | awk -F ';' '{printf "%s", $4}')
-
-    for ((i=0; i<${#currencies[@]}; i++)); do
-      if [ "$lastCurrency" == "${currencies[$i]}" ]; then
-        isCurrency=0
-        currenciesValue[$i]=$(echo "(${currenciesValue[$i]} + $lastValue)" | bc)
-        break
-      fi
-    done
-
-    if [ $isCurrency == 1 ]; then
-      currencies+=("$lastCurrency")
-      currenciesValue+=("$lastValue")
-    fi
-  done
-
-  local finalString=""
-  for ((i=0; i<${#currencies[@]}; i++)); do
-    if [ "${currenciesValue[$i]}" \< 0 ]; then
-        finalString+="${currencies[$i]} : ${currenciesValue[$i]}\n"
+  for name in $currencyNames; do
+    values=$(echo "$output" | grep -h "${name}" | awk -F ';' '{printf "%s ", $4}')
+    sum=$(echo "$values" | awk '{ sum = 0; for(i=1; i<=NF; i++) sum += $i; printf "%.4f\n", sum}')
+    if (( $(echo "$sum < 0" | bc -l) )); then
+      echo "$name : $sum"
     else
-        result=$(echo "scale=4; ${currenciesValue[$i]} * ((100 + ${margin}) / 100)" | bc)
-        finalString+="${currencies[$i]} : $result\n"
+      sum=$(echo "scale=4; $sum * ((100 + $margin) / 100)" | bc)
+      echo "$name : $sum"
     fi
   done
-
-  finalString="${finalString%"\n"}"
-
-  echo -e "$finalString" | sort
 }
 
 if [ "$#" -lt 2 ]; then
