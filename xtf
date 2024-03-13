@@ -208,22 +208,40 @@ profitFunc() {
   done
 }
 
-if [ "$#" -lt 2 ]; then
-  exit 1
-fi
+printHelp() {
+    echo "USAGE: xtf [-h|--help] [FILTER] [COMMAND] USER LOG [LOG2 [...]]"
+    echo "OPTIONS"
+    echo ""
+    echo "COMMAND can be one of:"
+    echo "  list - display records for the specified user."
+    echo "  list-currency - display a sorted list of occurring currencies."
+    echo "  status - display the actual account balance grouped and sorted by individual currencies."
+    echo "  profit - display the customer's account balance with fictitious earnings accounted for (base margin rate 20%)."
+    echo ""
+    echo "FILTER can be a combination of the following:"
+    echo "  -a DATETIME - after: consider only records after this date and time (exclusive). DATETIME format is YYYY-MM-DD HH:MM:SS."
+    echo "  -b DATETIME - before: consider only records before this date and time (exclusive)."
+    echo "  -c CURRENCY - consider only records matching the specified currency of size 3."
+    echo ""
+}
 
 for arg in "$@"; do
-  if [ $lastFlag -eq 1 ]; then
+  if [[ "$arg" == "-help" || "$arg" == "-h" ]]; then
+    printHelp
+    exit 0
+  fi
+
+  if [ $lastFlag == 1 ]; then
     after=$arg
     lastFlag=0
     ((afterSet++))
     continue
-  elif [ $lastFlag -eq 2 ]; then
+  elif [ $lastFlag == 2 ]; then
     before=$arg
     lastFlag=0
     ((beforeSet++))
     continue
-  elif [ $lastFlag -eq 3 ]; then
+  elif [ $lastFlag == 3 ]; then
     currency="$arg $currency"
     lastFlag=0
     continue
@@ -246,6 +264,9 @@ for arg in "$@"; do
   fi  
 done
 
+if [ "$#" -lt 2 ]; then
+  exit 1
+fi
 
 if [ "$user" == "" ]; then
   exit 1
